@@ -1,3 +1,5 @@
+I archived this project because I'm no longer working on it as it just works, there is also a feature in Roblox that makes the server in control of your movements so cheating isn't even possible on some/most games now, the website is still up though.
+
 <div align="center">
   <img src="favicon.svg" width="96" height="96" alt="RBX Radar logo">
   <h1>Roblox Ban Wave - Live Exploit Status</h1>
