@@ -49,7 +49,6 @@ const STATUS = {
   },
 };
 
-// Same thresholds as before, just centralised.
 function resolveStatus(rawScore) {
   const raw      = Number(rawScore);
   const scoreNum = raw > 1 ? raw / 100 : raw;
@@ -171,14 +170,21 @@ export default async function handler(req, res) {
     }
   }
 
-  if (threatScore === undefined || threatScore === null) threatScore = 78;
+  if (threatScore === undefined || threatScore === null) {
+    try {
+      const lastState = await kv.get('banwave:state');
+      threatScore = lastState?.pct ?? 78;
+    } catch {
+      threatScore = 78;
+    }
+  }
 
   const ipHash = hashIp(req);
   try {
     const rlKey = `rl:notify:${ipHash}`;
     const cnt   = await kv.incr(rlKey);
     if (cnt === 1) await kv.expire(rlKey, 3600);
-    if (cnt > 12) return res.status(429).json({ error: 'Too many requests' });
+    if (cnt > 20) return res.status(429).json({ error: 'Too many requests' });
   } catch {}
 
   let hashes;
@@ -194,11 +200,10 @@ export default async function handler(req, res) {
   const { pct, status } = resolveStatus(threatScore);
   const nowUnix = Math.floor(Date.now() / 1000);
 
-  // trend: keep the last *different* reading as "previous"
   let prev = null;
   try {
     const st = await kv.get('banwave:state');
-    if (st && typeof st.pct === 'number') prev = st.pct === pct ? (st.prev ?? null) : st.pct;
+    if (st && typeof st.pct === 'number') prev = st.pct;
     await kv.set('banwave:state', { pct, prev, ts: nowUnix });
   } catch {}
 
@@ -222,7 +227,14 @@ export default async function handler(req, res) {
           body:    JSON.stringify({ content: '', embeds: [embed] }),
         });
 
-        if (r.ok) { sent++; continue; }
+        if (r.ok) { 
+          sent++; 
+          continue; 
+        } else {
+          if (r.status === 404) {
+            await kv.set(`webhook:${hash}`, { ...entry, lastMessageId: null });
+          }
+        }
       }
 
       const r = await fetch(`${webhookUrl}?wait=true`, {
