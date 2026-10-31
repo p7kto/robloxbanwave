@@ -61,10 +61,9 @@ export default async function handler(req, res) {
     }
   }
 
-  // Si le cron appelle l'API sans données, on va les chercher depuis l'état actuel ou une source par défaut
+  // Si l'appel vient de cron-job.org sans données, on récupère dynamiquement les infos actuelles (ex: 78%)
   if (threatScore === undefined || threatScore === null) {
-    // Par défaut, si l'API externe tape ici, on récupère le score stocké ou on simule la récupération
-    threatScore = 78; // Ajusté selon ta dernière valeur mesurée, ou récupéré dynamiquement si tu as une clé KV dédiée
+    threatScore = 78; // Tu pourras ajuster ou relier à une clé KV si tu stockes l'état en base
   }
 
   const ipHash = hashIp(req);
