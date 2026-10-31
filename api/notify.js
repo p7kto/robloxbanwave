@@ -32,23 +32,23 @@ export default async function handler(req, res) {
       const webhookUrl = decrypt(entry.encrypted);
       const embed = {
         title:       '✅  Test - RBX Radar',
-        description: "Your Discord webhook is connected and working correctly!\nThis message will update dynamically.",
+        description: "Your Discord webhook is connected and working correctly!\nThis message will update dynamically in silence.",
         color:       0x22c55e,
         url:         'https://robloxbanwave.vercel.app',
         fields:      [{ name: 'Webhook status', value: 'Verified ✓', inline: true }],
         footer:      { text: 'robloxbanwave.vercel.app  ·  r/robloxhackers' },
-        timestamp:   new Date().toISOString(),
+        timestamp:   new Date().toISOString()
       };
 
       const r = await fetch(webhookUrl, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({ 
-          content: '@everyone', 
+          content: '', 
           username: 'Roblox Ban Wave', 
           avatar_url: 'https://robloxbanwave.vercel.app/logo.png', 
           embeds: [embed] 
-        }),
+        })
       });
 
       if (r.ok || r.status === 204) return res.json({ ok: true });
@@ -121,38 +121,35 @@ export default async function handler(req, res) {
         url:         'https://robloxbanwave.vercel.app',
         fields:      fields,
         footer:      { text: 'robloxbanwave.vercel.app  ·  r/robloxhackers' },
-        timestamp:   new Date().toISOString(),
+        timestamp:   new Date().toISOString()
       };
 
-      // Si un message a déjà été envoyé, on le modifie (PATCH)
       if (entry.lastMessageId) {
         const editUrl = `${webhookUrl}/messages/${entry.lastMessageId}`;
         const r = await fetch(editUrl, {
           method:  'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body:    JSON.stringify({ 
-            content: '@everyone', 
+            content: '', 
             embeds: [embed] 
-          }),
+          })
         });
 
         if (r.ok) {
           sent++;
           continue;
         }
-        // Si le message a été supprimé manuellement sur Discord, on passe à la création d'un nouveau
       }
 
-      // Sinon, on crée un nouveau message (POST) et on sauvegarde son ID
       const r = await fetch(`${webhookUrl}?wait=true`, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({ 
-          content: '@everyone', 
+          content: '', 
           username: 'Roblox Ban Wave', 
           avatar_url: 'https://robloxbanwave.vercel.app/logo.png', 
           embeds: [embed] 
-        }),
+        })
       });
 
       if (r.ok || r.status === 200) {
