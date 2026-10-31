@@ -81,11 +81,14 @@ export default async function handler(req, res) {
 
   let statusTitle, statusColor, statusDesc;
 
-  if (threatScore >= 3.5) {
+  // Calcul basé sur le pourcentage (ex: 78% -> 0.78 ou si l'API envoie directement une valeur sur 1 ou sur 100)
+  const scoreNum = Number(threatScore) > 1 ? Number(threatScore) / 100 : Number(threatScore);
+
+  if (scoreNum >= 0.35 || Number(threatScore) >= 3.5) {
     statusTitle = '🚨 NOT SAFE';
     statusColor = 0xef4444;
     statusDesc  = '**Active ban wave with significant recent reports. Stop all executors immediately.**\nAccounts using executors risk permanent bans.';
-  } else if (threatScore >= 1.0) {
+  } else if (scoreNum >= 0.10 || Number(threatScore) >= 1.0) {
     statusTitle = '⚠️ USE CAUTION';
     statusColor = 0xf59e0b;
     statusDesc  = '**Elevated activity — a wave may be starting or winding down.**\nCheck the reports before running anything.';
@@ -106,8 +109,10 @@ export default async function handler(req, res) {
 
       const webhookUrl = decrypt(entry.encrypted);
       
+      const displayScore = Number(threatScore) > 1 ? `${threatScore}%` : `${(Number(threatScore) * 100).toFixed(0)}%`;
+
       const fields = [
-        { name: 'THREAT SCORE', value: `**${Number(threatScore).toFixed(2)}**`, inline: true }
+        { name: 'THREAT LEVEL', value: `**${displayScore}**`, inline: true }
       ];
 
       if (topPost) {
