@@ -2,7 +2,7 @@ import { kv } from '@vercel/kv';
 import { decrypt } from './webhooks.js';
 import { createHash } from 'node:crypto';
 
-const COOLDOWN_MS = 45 * 60 * 1000;
+const COOLDOWN_MS = 10 * 60 * 1000;
 
 function hashToken(token) {
   const salt = process.env.WEBHOOK_CIPHER_KEY || 'CHANGE_ME';
@@ -21,9 +21,8 @@ function kvError(e) {
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
 
-  const { topPost, test, token } = req.body ?? {};
+  const { topPost, test, token, threatScore = 0 } = req.body ?? {};
 
-  // -- Test mode: send a single test notification to the caller's webhook ------
   if (test) {
     if (!token) return res.status(400).json({ error: 'token required for test mode' });
 
@@ -35,7 +34,7 @@ export default async function handler(req, res) {
       const webhookUrl = decrypt(entry.encrypted);
       const embed = {
         title:       '✅  Test - RBX Radar',
-        description: "Your Discord webhook is connected and working correctly!\nYou'll receive a notification like this whenever an active Roblox ban wave is detected on r/robloxhackers.",
+        description: "Your Discord webhook is connected and working correctly!\nYou'll receive dynamic status notifications whenever the ban wave threat level changes.",
         color:       0x22c55e,
         url:         'https://robloxbanwave.vercel.app',
         fields:      [{ name: 'Webhook status', value: 'Verified ✓', inline: true }],
@@ -46,7 +45,12 @@ export default async function handler(req, res) {
       const r = await fetch(webhookUrl, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ username: 'Roblox Ban Wave', avatar_url: 'https://robloxbanwave.vercel.app/logo.png', embeds: [embed] }),
+        body:    JSON.stringify({ 
+          content: '@everyone', 
+          username: 'Roblox Ban Wave', 
+          avatar_url: 'https://robloxbanwave.vercel.app/logo.png', 
+          embeds: [embed] 
+        }),
       });
 
       if (r.ok || r.status === 204) return res.json({ ok: true });
@@ -59,14 +63,13 @@ export default async function handler(req, res) {
     }
   }
 
-  // -- Normal broadcast: rate-limit by IP to prevent abuse ----------------------
   const ipHash = hashIp(req);
   try {
     const rlKey = `rl:notify:${ipHash}`;
     const cnt   = await kv.incr(rlKey);
     if (cnt === 1) await kv.expire(rlKey, 3600);
     if (cnt > 12) return res.status(429).json({ error: 'Too many requests' });
-  } catch { /* non-fatal if KV unavailable for rate limit */ }
+  } catch {}
 
   let hashes;
   try {
@@ -77,6 +80,22 @@ export default async function handler(req, res) {
   }
 
   if (!hashes?.length) return res.json({ sent: 0, total: 0 });
+
+  let statusTitle, statusColor, statusDesc;
+
+  if (threatScore >= 3.5) {
+    statusTitle = '🚨 NOT SAFE';
+    statusColor = 0xef4444;
+    statusDesc  = '**Active ban wave with significant recent reports. Stop all executors immediately.**\nAccounts using executors risk permanent bans.';
+  } else if (threatScore >= 1.0) {
+    statusTitle = '⚠️ USE CAUTION';
+    statusColor = 0xf59e0b;
+    statusDesc  = '**Elevated activity — a wave may be starting or winding down.**\nCheck the reports before running anything.';
+  } else {
+    statusTitle = '🟢 ALL CLEAR';
+    statusColor = 0x22c55e;
+    statusDesc  = '**No significant ban wave activity in the past 14 days.**\nLower risk, but conditions can change quickly.';
+  }
 
   const now    = Date.now();
   let sent     = 0;
@@ -90,22 +109,34 @@ export default async function handler(req, res) {
       if (entry.notifiedAt && now - entry.notifiedAt < COOLDOWN_MS) { skipped++; continue; }
 
       const webhookUrl = decrypt(entry.encrypted);
+      
+      const fields = [
+        { name: 'THREAT SCORE', value: `**${Number(threatScore).toFixed(2)}**`, inline: true }
+      ];
+
+      if (topPost) {
+        fields.push({ name: 'Most Recent Report', value: `[${topPost.title}](${topPost.url})`, inline: false });
+      }
+
       const embed = {
-        title:       '⚠  Roblox Ban Wave Active',
-        description: '**Do NOT use any Roblox executors right now.**\nA ban wave is being actively reported on r/robloxhackers.\nAccounts using executors risk permanent bans.',
-        color:       0xef4444,
+        title:       statusTitle,
+        description: statusDesc,
+        color:       statusColor,
         url:         'https://robloxbanwave.vercel.app',
-        fields:      topPost
-          ? [{ name: 'Most Recent Report', value: `[${topPost.title}](${topPost.url})`, inline: false }]
-          : [],
-        footer:    { text: 'robloxbanwave.vercel.app  ·  r/robloxhackers' },
-        timestamp: new Date().toISOString(),
+        fields:      fields,
+        footer:      { text: 'robloxbanwave.vercel.app  ·  r/robloxhackers' },
+        timestamp:   new Date().toISOString(),
       };
 
       const r = await fetch(webhookUrl, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ username: 'Roblox Ban Wave', avatar_url: 'https://robloxbanwave.vercel.app/logo.png', embeds: [embed] }),
+        body:    JSON.stringify({ 
+          content: '@everyone', 
+          username: 'Roblox Ban Wave', 
+          avatar_url: 'https://robloxbanwave.vercel.app/logo.png', 
+          embeds: [embed] 
+        }),
       });
 
       if (r.ok || r.status === 204) {
