@@ -30,7 +30,7 @@ export default async function handler(req, res) {
       if (!entry?.encrypted) return res.status(404).json({ error: 'Webhook not found - register it first.' });
 
       const webhookUrl = decrypt(entry.encrypted);
-      const currentTime = new Date().toLocaleTimeString('fr-FR', { timeZone: 'Europe/Paris', hour: '2-digit', minute: '2-digit' });
+      const nowUnix = Math.floor(Date.now() / 1000);
       
       const embed = {
         title:       '✅  Test - RBX Radar',
@@ -39,7 +39,7 @@ export default async function handler(req, res) {
         url:         'https://robloxbanwave.vercel.app',
         fields:      [
           { name: 'Webhook status', value: 'Verified ✓', inline: true },
-          { name: 'Dernière mise à jour', value: `🕒 ${currentTime}`, inline: true }
+          { name: 'Last Update', value: `🕒 <t:${nowUnix}:t>`, inline: true }
         ],
         footer:      { text: 'robloxbanwave.vercel.app  ·  r/robloxhackers' },
         timestamp:   new Date().toISOString()
@@ -109,7 +109,7 @@ export default async function handler(req, res) {
   let skipped  = 0;
   const failed = [];
 
-  const currentTime = new Date().toLocaleTimeString('fr-FR', { timeZone: 'Europe/Paris', hour: '2-digit', minute: '2-digit' });
+  const nowUnix = Math.floor(Date.now() / 1000);
 
   for (const hash of hashes) {
     try {
@@ -122,7 +122,7 @@ export default async function handler(req, res) {
 
       const fields = [
         { name: 'THREAT LEVEL', value: `**${displayScore}**`, inline: true },
-        { name: 'Dernière mise à jour', value: `🕒 ${currentTime}`, inline: true }
+        { name: 'Last Update', value: `🕒 <t:${nowUnix}:t>`, inline: true }
       ];
 
       if (topPost) {
@@ -152,7 +152,7 @@ export default async function handler(req, res) {
 
         if (r.ok) {
           sent++;
-          continue;
+            continue;
         }
       }
 
