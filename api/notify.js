@@ -2,8 +2,6 @@ import { kv } from '@vercel/kv';
 import { decrypt } from './webhooks.js';
 import { createHash } from 'node:crypto';
 
-const COOLDOWN_MS = 10 * 60 * 1000;
-
 function hashToken(token) {
   const salt = process.env.WEBHOOK_CIPHER_KEY || 'CHANGE_ME';
   return createHash('sha256').update(token + salt).digest('hex');
@@ -34,7 +32,7 @@ export default async function handler(req, res) {
       const webhookUrl = decrypt(entry.encrypted);
       const embed = {
         title:       '✅  Test - RBX Radar',
-        description: "Your Discord webhook is connected and working correctly!\nYou'll receive dynamic status notifications whenever the ban wave threat level changes.",
+        description: "Your Discord webhook is connected and working correctly!\nThis message will update dynamically.",
         color:       0x22c55e,
         url:         'https://robloxbanwave.vercel.app',
         fields:      [{ name: 'Webhook status', value: 'Verified ✓', inline: true }],
@@ -97,7 +95,6 @@ export default async function handler(req, res) {
     statusDesc  = '**No significant ban wave activity in the past 14 days.**\nLower risk, but conditions can change quickly.';
   }
 
-  const now    = Date.now();
   let sent     = 0;
   let skipped  = 0;
   const failed = [];
@@ -106,7 +103,6 @@ export default async function handler(req, res) {
     try {
       const entry = await kv.get(`webhook:${hash}`);
       if (!entry?.encrypted) { skipped++; continue; }
-      if (entry.notifiedAt && now - entry.notifiedAt < COOLDOWN_MS) { skipped++; continue; }
 
       const webhookUrl = decrypt(entry.encrypted);
       
@@ -128,7 +124,27 @@ export default async function handler(req, res) {
         timestamp:   new Date().toISOString(),
       };
 
-      const r = await fetch(webhookUrl, {
+      // Si un message a déjà été envoyé, on le modifie (PATCH)
+      if (entry.lastMessageId) {
+        const editUrl = `${webhookUrl}/messages/${entry.lastMessageId}`;
+        const r = await fetch(editUrl, {
+          method:  'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({ 
+            content: '@everyone', 
+            embeds: [embed] 
+          }),
+        });
+
+        if (r.ok) {
+          sent++;
+          continue;
+        }
+        // Si le message a été supprimé manuellement sur Discord, on passe à la création d'un nouveau
+      }
+
+      // Sinon, on crée un nouveau message (POST) et on sauvegarde son ID
+      const r = await fetch(`${webhookUrl}?wait=true`, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({ 
@@ -139,8 +155,9 @@ export default async function handler(req, res) {
         }),
       });
 
-      if (r.ok || r.status === 204) {
-        await kv.set(`webhook:${hash}`, { ...entry, notifiedAt: now });
+      if (r.ok || r.status === 200) {
+        const data = await r.json();
+        await kv.set(`webhook:${hash}`, { ...entry, lastMessageId: data.id });
         sent++;
       } else {
         failed.push(r.status);
