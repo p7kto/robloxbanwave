@@ -30,12 +30,17 @@ export default async function handler(req, res) {
       if (!entry?.encrypted) return res.status(404).json({ error: 'Webhook not found - register it first.' });
 
       const webhookUrl = decrypt(entry.encrypted);
+      const currentTime = new Date().toLocaleTimeString('fr-FR', { timeZone: 'Europe/Paris', hour: '2-digit', minute: '2-digit' });
+      
       const embed = {
         title:       '✅  Test - RBX Radar',
         description: "Your Discord webhook is connected and working correctly!\nThis message will update dynamically in silence.",
         color:       0x22c55e,
         url:         'https://robloxbanwave.vercel.app',
-        fields:      [{ name: 'Webhook status', value: 'Verified ✓', inline: true }],
+        fields:      [
+          { name: 'Webhook status', value: 'Verified ✓', inline: true },
+          { name: 'Dernière mise à jour', value: `🕒 ${currentTime}`, inline: true }
+        ],
         footer:      { text: 'robloxbanwave.vercel.app  ·  r/robloxhackers' },
         timestamp:   new Date().toISOString()
       };
@@ -61,9 +66,8 @@ export default async function handler(req, res) {
     }
   }
 
-  // Si l'appel vient de cron-job.org sans données, on récupère dynamiquement les infos actuelles (ex: 78%)
   if (threatScore === undefined || threatScore === null) {
-    threatScore = 78; // Tu pourras ajuster ou relier à une clé KV si tu stockes l'état en base
+    threatScore = 78;
   }
 
   const ipHash = hashIp(req);
@@ -105,6 +109,8 @@ export default async function handler(req, res) {
   let skipped  = 0;
   const failed = [];
 
+  const currentTime = new Date().toLocaleTimeString('fr-FR', { timeZone: 'Europe/Paris', hour: '2-digit', minute: '2-digit' });
+
   for (const hash of hashes) {
     try {
       const entry = await kv.get(`webhook:${hash}`);
@@ -115,7 +121,8 @@ export default async function handler(req, res) {
       const displayScore = Number(threatScore) > 1 ? `${threatScore}%` : `${(Number(threatScore) * 100).toFixed(0)}%`;
 
       const fields = [
-        { name: 'THREAT LEVEL', value: `**${displayScore}**`, inline: true }
+        { name: 'THREAT LEVEL', value: `**${displayScore}**`, inline: true },
+        { name: 'Dernière mise à jour', value: `🕒 ${currentTime}`, inline: true }
       ];
 
       if (topPost) {
